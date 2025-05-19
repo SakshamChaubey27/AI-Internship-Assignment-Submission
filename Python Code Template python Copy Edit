@@ -1,0 +1,47 @@
+import os
+import openai
+import requests
+from datetime import datetime, timedelta
+from googleapiclient.discovery import build
+
+# Load your keys
+YOUTUBE_API_KEY = 'YOUR_YOUTUBE_API_KEY'
+openai.api_key = 'YOUR_OPENAI_KEY'
+
+# Step 1: Search YouTube
+def search_youtube(query):
+    youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+    published_after = (datetime.utcnow() - timedelta(days=14)).isoformat("T") + "Z"
+    
+    response = youtube.search().list(
+        q=query,
+        part='snippet',
+        type='video',
+        maxResults=20,
+        publishedAfter=published_after
+    ).execute()
+
+    results = []
+    for item in response['items']:
+        video_id = item['id']['videoId']
+        title = item['snippet']['title']
+        results.append((video_id, title))
+    return results
+
+# Step 2: Analyze titles using ChatGPT
+def analyze_titles(titles, query):
+    titles_str = "\n".join([f"{i+1}. {title}" for i, (_, title) in enumerate(titles)])
+    prompt = f"Given the search query '{query}', select the most relevant and informative title from the list below:\n{titles_str}\nReturn only the best title and its index."
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content.strip()
+
+# Example usage
+if __name__ == "__main__":
+    query = input("Enter your search (e.g., 'latest AI tools'): ")
+    videos = search_youtube(query)
+    best = analyze_titles(videos, query)
+    print("\nTop Suggested Video:", best)
